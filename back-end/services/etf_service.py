@@ -214,50 +214,19 @@ class ETFVectorDB:
             logger.error(f"ETF 데이터 업데이트 실패: {str(e)}")
             return False
 
-    async def aquery(self, query: str) -> Dict[str, Any]:
-        """비동기 쿼리 실행"""
-        try:
-            if not self.vectordb:
-                raise Exception("Vector DB가 초기화되지 않았습니다.")
-            
-            logger.info(f"Executing query: {query}")
-            
-            # 쿼리 실행 (k 값을 10으로 증가)
-            docs = self.vectordb.similarity_search(query, k=10)
-            logger.info(f"Found {len(docs)} relevant documents")
-            
-            if not docs:
-                logger.warning("No documents found for the query")
-                return {
-                    "recommendations": [],
-                    "reasons": [],
-                    "portfolio_analysis": "죄송합니다. 현재 데이터베이스에서 관련 정보를 찾을 수 없습니다.",
-                    "rebalancing_needed": None,
-                    "rebalancing_suggestions": None
-                }
-            
-            # Rerank 적용
-            if docs and self.rerank_model:
-                doc_texts = [doc.page_content for doc in docs]
-                scores = self.rerank_model.predict([(query, doc) for doc in doc_texts])
-                docs = [docs[i] for i in scores.argsort()[::-1]]
-                logger.info(f"Reranked {len(docs)} documents")
-            
-            # 결과 처리
-            result = {
-                "recommendations": docs,  # Document 객체들을 직접 저장
-                "reasons": [],
-                "portfolio_analysis": None,
-                "rebalancing_needed": None,
-                "rebalancing_suggestions": None
-            }
-            
-            logger.info(f"Query result: {len(result['recommendations'])} recommendations found")
-            return result
-            
-        except Exception as e:
-            logger.error(f"쿼리 실행 중 오류 발생: {str(e)}")
-            raise
+def check_openai_api_key() -> bool:
+    """OpenAI API 키의 유효성을 확인합니다."""
+    try:
+        # 간단한 테스트 쿼리를 통해 API 키 유효성 확인
+        test_embeddings = OpenAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            openai_api_key=OPENAI_API_KEY
+        )
+        test_embeddings.embed_query("test")
+        return True
+    except Exception as e:
+        logger.error(f"OpenAI API 키 확인 실패: {str(e)}")
+        return False
 
 # 전역 변수로 vector_db 인스턴스 생성
 vector_db = ETFVectorDB()
@@ -309,20 +278,6 @@ try:
 except Exception as e:
     logger.error(f"서비스 초기화 실패: {str(e)}")
     raise
-
-def check_openai_api_key() -> bool:
-    """OpenAI API 키의 유효성을 확인합니다."""
-    try:
-        # 간단한 테스트 쿼리를 통해 API 키 유효성 확인
-        test_embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            openai_api_key=OPENAI_API_KEY
-        )
-        test_embeddings.embed_query("test")
-        return True
-    except Exception as e:
-        logger.error(f"OpenAI API 키 확인 실패: {str(e)}")
-        return False
 
 @token_monitor.track_usage
 async def recommend_etf(
