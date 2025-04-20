@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'etf-api'
+    static_configs:
+      - targets: ['host.docker.internal:8000']  # Docker에서 호스트 머신의 FastAPI 서버에 접근
+    metrics_path: '/metrics'
+    scheme: 'http' 
