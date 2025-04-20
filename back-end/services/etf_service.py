@@ -508,9 +508,9 @@ async def generate_rebalance_report(
         Dict[str, Any]: 리밸런싱 리포트
     """
     try:
-        # 고객 프로필 정보를 포함한 성과 분석 쿼리
-        performance_query = f"""
-        안녕하세요! {age}세의 고객님의 ETF 포트폴리오를 분석해드리겠습니다.
+        # 통합된 리밸런싱 리포트 쿼리
+        rebalance_query = f"""
+        안녕하세요! {age}세의 고객님의 ETF 포트폴리오를 종합적으로 분석해드리겠습니다.
         
         고객님의 투자 성향:
         - 나이: {age}세
@@ -519,74 +519,65 @@ async def generate_rebalance_report(
         
         현재 보유하신 ETF: {', '.join(etfs_owned)}
         
+        다음 세 가지 섹션을 각각 독립적으로 상세히 분석해주세요:
+        
+        [1. 포트폴리오 성과 분석]
         다음 내용을 쉽고 친절하게 설명해주세요:
         1. 각 ETF의 최근 1년간 성과와 특징을 알기 쉽게 설명
         2. 현재 포트폴리오가 얼마나 잘 분산되어 있는지 설명
         3. 고객님의 상황(나이, 위험 감내도, 재무 상태)에 맞는지 평가
         
-        설명 시 다음을 유의해주세요:
-        - 전문 용어 대신 쉬운 말을 사용
-        - 구어체로 친근하게 설명
-        - 구체적인 예시를 들어 설명
-        - 긍정적이고 격려하는 톤으로 작성
-        """
-        
-        # 리밸런싱 필요성 분석 쿼리
-        rebalancing_query = f"""
-        안녕하세요! {age}세의 고객님의 포트폴리오 리밸런싱 필요성을 분석해드리겠습니다.
-        
-        고객님의 투자 성향:
-        - 나이: {age}세
-        - 위험 감내도: {risk_tolerance}
-        - 재무 상태: 월 수입 {financial_status.get('income', 0)}만원, 저축 {financial_status.get('savings', 0)}만원
-        
-        현재 보유하신 ETF: {', '.join(etfs_owned)}
-        
+        [2. 리밸런싱 필요성]
         다음 내용을 쉽고 친절하게 설명해주세요:
         1. 현재 포트폴리오의 리밸런싱이 필요한지 여부
         2. 리밸런싱이 필요한 이유 또는 필요하지 않은 이유
         3. 고객님의 상황에 맞는 조언
         
-        설명 시 다음을 유의해주세요:
-        - 전문 용어 대신 쉬운 말을 사용
-        - 구어체로 친근하게 설명
-        - 구체적인 예시를 들어 설명
-        - 긍정적이고 격려하는 톤으로 작성
-        """
-        
-        # 구체적인 리밸런싱 제안 쿼리
-        suggestions_query = f"""
-        안녕하세요! {age}세의 고객님께 포트폴리오 조정 방안을 제안드리겠습니다.
-        
-        고객님의 투자 성향:
-        - 나이: {age}세
-        - 위험 감내도: {risk_tolerance}
-        - 재무 상태: 월 수입 {financial_status.get('income', 0)}만원, 저축 {financial_status.get('savings', 0)}만원
-        
-        현재 보유하신 ETF: {', '.join(etfs_owned)}
-        
+        [3. 리밸런싱 제안]
         다음 내용을 쉽고 친절하게 설명해주세요:
         1. 포트폴리오 조정 전략을 구체적으로 설명
         2. 각 ETF의 적정 비중을 제안
         3. 매수/매도가 필요한 경우 구체적인 제안
         4. 포트폴리오 조정 시기와 주기에 대한 권장사항
         
-        설명 시 다음을 유의해주세요:
+        각 섹션의 설명 시 다음을 유의해주세요:
         - 전문 용어 대신 쉬운 말을 사용
         - 구어체로 친근하게 설명
         - 구체적인 예시를 들어 설명
         - 긍정적이고 격려하는 톤으로 작성
+        - 각 섹션을 명확하게 구분하여 작성
         """
         
-        # 성과 분석
-        performance_analysis = await query_llm(performance_query)
+        # 통합된 리포트 생성
+        full_report = await query_llm(rebalance_query)
         
-        # 리밸런싱 필요성 분석
-        rebalancing_analysis = await query_llm(rebalancing_query)
+        # 리포트를 섹션별로 분리
+        sections = full_report.split('\n\n')
+        performance_analysis = ""
+        rebalancing_analysis = ""
+        suggestions = ""
+        
+        current_section = None
+        for section in sections:
+            if "[1. 포트폴리오 성과 분석]" in section:
+                current_section = "performance"
+                performance_analysis = section.split("[1. 포트폴리오 성과 분석]")[1].strip()
+            elif "[2. 리밸런싱 필요성]" in section:
+                current_section = "rebalancing"
+                rebalancing_analysis = section.split("[2. 리밸런싱 필요성]")[1].strip()
+            elif "[3. 리밸런싱 제안]" in section:
+                current_section = "suggestions"
+                suggestions = section.split("[3. 리밸런싱 제안]")[1].strip()
+            elif current_section:
+                if current_section == "performance":
+                    performance_analysis += "\n\n" + section
+                elif current_section == "rebalancing":
+                    rebalancing_analysis += "\n\n" + section
+                elif current_section == "suggestions":
+                    suggestions += "\n\n" + section
+        
+        # 리밸런싱 필요 여부 판단
         rebalancing_needed = "필요하다" in rebalancing_analysis or "권장된다" in rebalancing_analysis
-        
-        # 구체적인 리밸런싱 제안
-        suggestions = await query_llm(suggestions_query)
         
         # 종합 리포트 생성
         report = f"""
@@ -607,9 +598,7 @@ async def generate_rebalance_report(
             "report": report,
             "performance_analysis": performance_analysis,
             "rebalancing_needed": rebalancing_needed,
-            "suggestions": suggestions,
-            "customer_id": customer_id,
-            "analysis_date": datetime.now().strftime('%Y-%m-%d')
+            "suggestions": suggestions
         }
         
     except Exception as e:

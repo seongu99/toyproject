@@ -8,6 +8,7 @@ from config import BASE_DIR
 import logging
 from datetime import datetime
 import os
+from contextlib import asynccontextmanager
 
 # 로깅 설정
 logging.basicConfig(
@@ -16,10 +17,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """서버 시작/종료 시 스케줄러 관리"""
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        perform_incremental_update,
+        trigger=CronTrigger(hour=23, minute=59),
+        id="incremental_update",
+        replace_existing=True
+    )
+    scheduler.start()
+    logger.info("백그라운드 스케줄러 시작")
+    yield
+    scheduler.shutdown()
+    logger.info("백그라운드 스케줄러 종료")
+
 app = FastAPI(
     title="ETF Recommendation API",
     description="ETF 추천 및 포트폴리오 리밸런싱 서비스",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Prometheus 메트릭 노출
@@ -40,27 +58,6 @@ def perform_incremental_update():
             logger.error("증분 업데이트 실패")
     except Exception as e:
         logger.error(f"증분 업데이트 중 오류 발생: {str(e)}")
-
-@app.on_event("startup")
-async def startup_event():
-    """서버 시작 시 스케줄러 초기화"""
-    scheduler = BackgroundScheduler()
-    # 매일 밤 11시 59분에 실행
-    scheduler.add_job(
-        perform_incremental_update,
-        trigger=CronTrigger(hour=23, minute=59),
-        id="incremental_update",
-        replace_existing=True
-    )
-    scheduler.start()
-    logger.info("백그라운드 스케줄러 시작")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """서버 종료 시 스케줄러 정리"""
-    scheduler = BackgroundScheduler()
-    scheduler.shutdown()
-    logger.info("백그라운드 스케줄러 종료")
 
 @app.get("/")
 def home():
