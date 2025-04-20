@@ -19,3 +19,7 @@ ENV/
 
 # Log files
 *.log
+
+# Local development settings
+.env
+.env.local
