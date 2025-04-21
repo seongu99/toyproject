@@ -21,5 +21,3 @@ if not os.path.exists(DOCS_PATH):
 # vector_db 디렉토리가 없으면 생성
 if not os.path.exists(VECTOR_DB_PATH):
     os.makedirs(VECTOR_DB_PATH)
-
-RAG_API_URL = "http://localhost:8000"

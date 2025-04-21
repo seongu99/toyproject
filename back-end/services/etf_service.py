@@ -15,7 +15,6 @@ import logging
 import shutil
 from datetime import datetime
 from monitoring.token_monitor import token_monitor
-from sentence_transformers import CrossEncoder  # Rerank 모델 추가
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +26,6 @@ class ETFVectorDB:
         self.last_update = {}
         self.vectordb = None
         self.embeddings = None
-        self.rerank_model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')  # Rerank 모델 초기화
         self._initialize_embeddings()
         self._load_or_create_db()
 
@@ -174,25 +172,33 @@ class ETFVectorDB:
             logger.error(f"CSV 문서 변환 실패: {str(e)}")
             return []
 
-    def update_etf_data(self, pdf_path: str) -> bool:
+    def update_etf_data(self, file_path: str) -> bool:
         """
-        PDF 파일을 사용하여 ETF 데이터를 업데이트합니다.
+        PDF 또는 CSV 파일을 사용하여 ETF 데이터를 업데이트합니다.
         
         Args:
-            pdf_path: PDF 파일 경로
+            file_path: PDF 또는 CSV 파일 경로
             
         Returns:
             bool: 업데이트 성공 여부
         """
         try:
-            logger.info(f"ETF 데이터 업데이트 시작: {pdf_path}")
+            logger.info(f"ETF 데이터 업데이트 시작: {file_path}")
             
-            # PDF 파일 로드
-            loader = PyMuPDFLoader(pdf_path)
-            documents = loader.load()
+            documents = []
+            
+            # 파일 확장자에 따라 적절한 로더 선택
+            if file_path.lower().endswith('.pdf'):
+                loader = PyMuPDFLoader(file_path)
+                documents = loader.load()
+            elif file_path.lower().endswith('.csv'):
+                documents = self._load_csv_documents(file_path)
+            else:
+                logger.warning(f"지원하지 않는 파일 형식: {file_path}")
+                return False
             
             if not documents:
-                logger.warning(f"PDF 파일에서 문서를 로드할 수 없습니다: {pdf_path}")
+                logger.warning(f"파일에서 문서를 로드할 수 없습니다: {file_path}")
                 return False
             
             # 문서 분할
@@ -204,7 +210,7 @@ class ETFVectorDB:
             
             # 업데이트 상태 저장
             self.vectordb.save_local(self.vector_db_path)
-            self.last_update[pdf_path] = os.path.getmtime(pdf_path)
+            self.last_update[file_path] = os.path.getmtime(file_path)
             self._save_last_update_times()
             
             logger.info(f"ETF 데이터 업데이트 완료: {len(texts)}개 문서 추가")
@@ -237,7 +243,7 @@ try:
     vector_db_manager = ETFVectorDB()
     logger.info("ETF Vector DB 관리자 초기화 완료")
     
-    # Initialize QA chain
+    # Initialize ChatOpenAI
     logger.info("ChatOpenAI 초기화 시작")
     llm = ChatOpenAI(
         model=OPENAI_MODEL,
@@ -245,34 +251,6 @@ try:
         openai_api_key=OPENAI_API_KEY
     )
     logger.info("ChatOpenAI 초기화 완료")
-    
-    # Create a prompt template
-    logger.info("프롬프트 템플릿 생성 시작")
-    prompt_template = """다음 질문에 대해 자세히 답변해주세요:
-
-    {context}
-
-    질문: {question}
-    답변:"""
-    
-    prompt = PromptTemplate(
-        template=prompt_template,
-        input_variables=["context", "question"]
-    )
-    logger.info("프롬프트 템플릿 생성 완료")
-    
-    # Initialize QA chain
-    logger.info("QA 체인 초기화 시작")
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=vector_db_manager.vectordb.as_retriever(
-            search_kwargs={"k": 10}  # 상위 10개 문서 검색
-        ),
-        return_source_documents=True,
-        chain_type_kwargs={"prompt": prompt}
-    )
-    logger.info("QA 체인 초기화 완료")
     
     logger.info("서비스 초기화 완료")
 except Exception as e:
